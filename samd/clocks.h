@@ -56,7 +56,7 @@ void disconnect_gclk_from_peripheral(uint8_t gclk, uint8_t peripheral);
 void enable_clock_generator(uint8_t gclk, uint32_t source, uint16_t divisor);
 void disable_clock_generator(uint8_t gclk);
 
-void clock_init(bool has_crystal, uint32_t dfll48m_fine_calibration);
+void clock_init(bool has_rtc_crystal, uint32_t xosc_freq, bool xosc_is_crystal, uint32_t dfll48m_fine_calibration);
 void init_dynamic_clocks(void);
 
 bool clock_get_enabled(uint8_t type, uint8_t index);

@@ -92,26 +92,32 @@ static void init_clock_source_dpll0(void)
 {
     GCLK->PCHCTRL[OSCCTRL_GCLK_ID_FDPLL0].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN(5);
     OSCCTRL->Dpll[0].DPLLRATIO.reg = OSCCTRL_DPLLRATIO_LDRFRAC(0) | OSCCTRL_DPLLRATIO_LDR(59);
-    OSCCTRL->Dpll[0].DPLLCTRLB.reg = OSCCTRL_DPLLCTRLB_REFCLK(0);
+    OSCCTRL->Dpll[0].DPLLCTRLB.reg = OSCCTRL_DPLLCTRLB_REFCLK(OSCCTRL_DPLLCTRLB_REFCLK_GCLK_Val);
     OSCCTRL->Dpll[0].DPLLCTRLA.reg = OSCCTRL_DPLLCTRLA_ENABLE;
 
     while (!(OSCCTRL->Dpll[0].DPLLSTATUS.bit.LOCK || OSCCTRL->Dpll[0].DPLLSTATUS.bit.CLKRDY)) {}
 }
 
-void clock_init(bool has_crystal, uint32_t dfll48m_fine_calibration) {
+void clock_init(bool has_rtc_crystal, uint32_t xosc_freq, bool xosc_is_crystal, uint32_t dfll48m_fine_calibration) {
     // DFLL48M is enabled by default
     // TODO: handle fine calibration data.
 
+	bool has_xosc = (xosc_freq != 0);
+
     init_clock_source_osculp32k();
 
-    if (has_crystal) {
+    if (has_rtc_crystal) {
         init_clock_source_xosc32k();
         OSC32KCTRL->RTCCTRL.bit.RTCSEL = OSC32KCTRL_RTCCTRL_RTCSEL_XOSC32K_Val;
+	} else if (has_xosc) {
+		// Optional: generate 32k from the xosc using a divider.
     } else {
         OSC32KCTRL->RTCCTRL.bit.RTCSEL = OSC32KCTRL_RTCCTRL_RTCSEL_ULP32K_Val;
     }
 
     MCLK->CPUDIV.reg = MCLK_CPUDIV_DIV(1);
+
+	// NOTE(Qyriad): GCLK_GEN[0] is used as GCLK_MAIN (SAMD/E5x datasheet 14.6.2.3).
 
     enable_clock_generator_sync(0, GCLK_GENCTRL_SRC_DPLL0_Val, 1, false);
     enable_clock_generator_sync(1, GCLK_GENCTRL_SRC_DFLL_Val, 1, false);
