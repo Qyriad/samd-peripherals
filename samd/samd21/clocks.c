@@ -98,7 +98,7 @@ static void init_clock_source_xosc32k(void) {
     while (!SYSCTRL->PCLKSR.bit.XOSC32KRDY) {}
 }
 
-static void init_clock_source_dfll48m_xosc(void) {
+static void init_clock_source_dfll48m_xosc32(void) {
     SYSCTRL->DFLLCTRL.reg = SYSCTRL_DFLLCTRL_ENABLE;
     while (!SYSCTRL->PCLKSR.bit.DFLLRDY) {}
     SYSCTRL->DFLLMUL.reg = SYSCTRL_DFLLMUL_CSTEP(0x1f / 4) |
@@ -142,25 +142,36 @@ static void init_clock_source_dfll48m_usb(uint32_t fine_calibration) {
     while (GCLK->STATUS.bit.SYNCBUSY) {}
 }
 
-void clock_init(bool has_crystal, uint32_t dfll48m_fine_calibration)
+// xosc_freq = 0 to use the internal clock.
+void clock_init(bool has_rtc_crystal, uint32_t xosc_freq, bool xosc_is_crystal, xosc_freq, uint32_t dfll48m_fine_calibration)
 {
+	bool has_xosc = (xosc_freq != 0);
+
     init_clock_source_osc8m();
-    if (has_crystal) {
+    if (has_rtc_crystal) {
         init_clock_source_xosc32k();
-    } else {
+    } else if (has_xosc) {
+		// generate 32k from the xosc using a divider?
+		// this is optional; using the internal one is prolly fine
+	} else {
         init_clock_source_osc32k();
     }
 
-    if (has_crystal) {
+	if (has_xosc) {
+        enable_clock_generator(3, GCLK_GENCTRL_SRC_XOSCK_Val, 1);
+        connect_gclk_to_peripheral(3, GCLK_CLKCTRL_ID_DFLL48_Val);
+        init_clock_source_dfll48m_xosc(); // copy _xosc32 version and adjust multiplier / etc
+	}
+	else if (has_rtc_crystal) {
         enable_clock_generator(3, GCLK_GENCTRL_SRC_XOSC32K_Val, 1);
         connect_gclk_to_peripheral(3, GCLK_CLKCTRL_ID_DFLL48_Val);
-        init_clock_source_dfll48m_xosc();
+        init_clock_source_dfll48m_xosc32();
     } else {
         init_clock_source_dfll48m_usb(dfll48m_fine_calibration);
     }
 
     enable_clock_generator(0, GCLK_GENCTRL_SRC_DFLL48M_Val, 1);
-    if (has_crystal) {
+    if (has_rtc_crystal) {
         enable_clock_generator(2, GCLK_GENCTRL_SRC_XOSC32K_Val, 1);
     } else {
         enable_clock_generator(2, GCLK_GENCTRL_SRC_OSC32K_Val, 1);
