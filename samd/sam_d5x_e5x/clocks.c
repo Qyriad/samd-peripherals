@@ -88,11 +88,19 @@ static void init_clock_source_xosc32k(void) {
                               OSC32KCTRL_XOSC32K_CGM(1);
 }
 
-static void init_clock_source_dpll0(void)
+static void init_clock_source_dpll0(bool use_xosc0)
 {
-    GCLK->PCHCTRL[OSCCTRL_GCLK_ID_FDPLL0].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN(5);
-    OSCCTRL->Dpll[0].DPLLRATIO.reg = OSCCTRL_DPLLRATIO_LDRFRAC(0) | OSCCTRL_DPLLRATIO_LDR(59);
-    OSCCTRL->Dpll[0].DPLLCTRLB.reg = OSCCTRL_DPLLCTRLB_REFCLK(OSCCTRL_DPLLCTRLB_REFCLK_GCLK_Val);
+	uint8_t refclock;
+	if (use_xosc0) {
+		refclock = OSCCTRL_DPLLCTRLB_REFCLK_XOSC0_Val;
+	} else {
+		refclock = OSCCTRL_DPLLCTRLB_REFCLK_GCLK_Val;
+		GCLK->PCHCTRL[OSCCTRL_GCLK_ID_FDPLL0].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN(5);
+		// FIXME: should this be conditional?
+		OSCCTRL->Dpll[0].DPLLRATIO.reg = OSCCTRL_DPLLRATIO_LDRFRAC(0) | OSCCTRL_DPLLRATIO_LDR(59);
+	}
+
+    OSCCTRL->Dpll[0].DPLLCTRLB.reg = OSCCTRL_DPLLCTRLB_REFCLK(refclock);
     OSCCTRL->Dpll[0].DPLLCTRLA.reg = OSCCTRL_DPLLCTRLA_ENABLE;
 
     while (!(OSCCTRL->Dpll[0].DPLLSTATUS.bit.LOCK || OSCCTRL->Dpll[0].DPLLSTATUS.bit.CLKRDY)) {}
@@ -117,12 +125,27 @@ void clock_init(bool has_rtc_crystal, uint32_t xosc_freq, bool xosc_is_crystal, 
 
     MCLK->CPUDIV.reg = MCLK_CPUDIV_DIV(1);
 
+	if (has_xosc) {
+		// Use XOSC0 as the REFCLK for DPLL0.
+	}
+
 	// NOTE(Qyriad): GCLK_GEN[0] is used as GCLK_MAIN (SAMD/E5x datasheet 14.6.2.3).
 
     enable_clock_generator_sync(0, GCLK_GENCTRL_SRC_DPLL0_Val, 1, false);
     enable_clock_generator_sync(1, GCLK_GENCTRL_SRC_DFLL_Val, 1, false);
     enable_clock_generator_sync(4, GCLK_GENCTRL_SRC_DPLL0_Val, 1, false);
+
+	// NOTE(Qyriad): If !has_xosc, GCLK 5 is set as the REFCLK source for DPLL0 in
+	// init_clock_source_dpll0(), but I don't know if GCLK 5 is used elsewhere too,
+	// so I haven't made enabling GCLK 5 conditional on has_xosc, here.
+
+	// f_DPLL = f_CKR * (LDR + 1 + (LDRFRAC / 32))
+	// f_DPLL = f_CKR * (0 + 1 + (59 / 32))
+	// f_DPLL = f_CKR * (1 + 59/32)
+	// f_DPLL = 2 MHz * (1 + 59/32)
+	// f_DPLL = 5_687_500
     enable_clock_generator_sync(5, GCLK_GENCTRL_SRC_DFLL_Val, 24, false);
+
     enable_clock_generator_sync(6, GCLK_GENCTRL_SRC_DFLL_Val, 4, false);
 
     init_clock_source_dpll0();
